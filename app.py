@@ -4,12 +4,15 @@ Docs:
     https://developers.google.com/maps/documentation/places/web-service/text-search?hl=de
 """
 
-import streamlit as st
-import os
-import requests
-import pandas as pd
-import dotenv
 import io
+import os
+import dotenv
+import requests
+import streamlit as st
+import pandas as pd
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from get_emails import get_emails_from_website
 
 dotenv.load_dotenv()
 API_KEY = os.getenv("GOOGLE_MAPS_API_KEY")
@@ -41,44 +44,75 @@ if st.button("Run Query"):
     else:
         keywords = [kw.strip() for kw in keywords_input.splitlines() if kw.strip()]
         results = []
-        for keyword in keywords:
-            st.write(f"Searching for: **{keyword}**")
-            try:
-                response = requests.post(
-                    url="https://places.googleapis.com/v1/places:searchText",
-                    params={
-                        "textQuery": keyword,
-                        "languageCode": "de",
-                        "pageSize": 50,
-                    },
-                    headers={
-                        "Content-Type": "application/json",
-                        "X-Goog-Api-Key": API_KEY,
-                        "X-Goog-FieldMask": "*",  # This returns all available fields.
-                    },
-                    timeout=60,
-                )
-                response.raise_for_status()
-                data = response.json()
+        tasks = []
 
-                # Extract places data; if no key exists, use an empty list.
-                places = data.get("places", [])
-                for place in places:
-                    results.append(
-                        {
-                            "name": place.get("name", ""),
-                            "phone_number": place.get("internationalPhoneNumber", ""),
-                            "address": place.get("formattedAddress", ""),
-                            "website_uri": place.get("websiteUri", ""),
-                            "place_type": place.get("primaryType", ""),
-                        }
+        with ThreadPoolExecutor() as executor:
+            for keyword in keywords:
+                st.write(f"Searching for: **{keyword}**")
+                try:
+                    response = requests.post(
+                        url="https://places.googleapis.com/v1/places:searchText",
+                        params={
+                            "textQuery": keyword,
+                            "languageCode": "de",
+                            # "pageSize": 50,
+                        },
+                        headers={
+                            "Content-Type": "application/json",
+                            "X-Goog-Api-Key": API_KEY,
+                            "X-Goog-FieldMask": "*",  # This returns all available fields.
+                        },
+                        timeout=60,
                     )
-            except Exception as e:
-                st.error(f"Error querying '{keyword}': {e}")
+                    response.raise_for_status()
+                    data = response.json()
+                    places = data.get("places", [])
+                    for place in places:
+                        url = place.get("websiteUri")
+                        if url:
+                            future = executor.submit(get_emails_from_website, url)
+                            tasks.append((future, place))
+                        else:
+                            results.append(
+                                {
+                                    "name": place.get("displayName", {}).get(
+                                        "text", ""
+                                    ),
+                                    "url": url,
+                                    "emails": [],
+                                    "phone_number": place.get(
+                                        "internationalPhoneNumber", ""
+                                    ),
+                                    "address": place.get("formattedAddress", ""),
+                                    "place_type": place.get("primaryType", ""),
+                                }
+                            )
+                except Exception as e:
+                    st.error(f"Error querying '{keyword}': {e}")
+
+            for future, place in tasks:
+                try:
+                    emails = future.result(timeout=60)  
+                except Exception as e:
+                    st.warning(
+                        f"Error scraping emails from {place.get('websiteUri')}: {e}. Skipping..."
+                    )
+                    emails = []
+
+                results.append(
+                    {
+                        "name": place.get("displayName", {}).get("text", ""),
+                        "url": place.get("websiteUri"),
+                        "emails": emails,
+                        "phone_number": place.get("internationalPhoneNumber", ""),
+                        "address": place.get("formattedAddress", ""),
+                        "place_type": place.get("primaryType", ""),
+                    }
+                )
 
         unique_results = {}
         for result in results:
-            key = (result["address"], result["website_uri"])
+            key = (result["address"], result["url"])
             unique_results[key] = result
 
         st.write(f"Found **{len(unique_results)}** unique results.")
@@ -88,7 +122,13 @@ if st.button("Run Query"):
         with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
             df.to_excel(writer, index=False, sheet_name="Sheet1")
             worksheet = writer.sheets["Sheet1"]
-            worksheet.set_column("A:E", 30)
+            worksheet.set_column("A:A", 50)
+            worksheet.set_column("B:B", 70)
+            worksheet.set_column("C:C", 70)
+            worksheet.set_column("D:D", 30)
+            worksheet.set_column("E:E", 50)
+            worksheet.set_column("F:F", 30)
+
         output.seek(0)
 
         st.download_button(

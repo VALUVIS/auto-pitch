@@ -8,3 +8,8 @@ xlsxwriter
 
 # Streamlit
 streamlit
+
+# Scraping
+email_validator
+beautifulsoup4
+requests
