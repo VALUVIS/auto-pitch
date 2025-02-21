@@ -29,7 +29,7 @@ st.title("Google Places API Query Tool")
 st.markdown(
     """
 This tool queries the Google Places API for a list of keywords and outputs the results as an Excel download.
-Please enter one keyword per line.
+**Please enter one keyword per line.**
 """
 )
 
