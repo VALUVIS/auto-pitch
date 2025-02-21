@@ -86,7 +86,9 @@ if st.button("Run Query"):
 
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-            df.to_excel(writer, index=False)
+            df.to_excel(writer, index=False, sheet_name="Sheet1")
+            worksheet = writer.sheets["Sheet1"]
+            worksheet.set_column("A:E", 30)
         output.seek(0)
 
         st.download_button(
