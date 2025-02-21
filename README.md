@@ -1,2 +1,3 @@
-# auto-pitch
-This repo is made for automatically creating pitches.
+# Auto-Pitch
+
+README.md will be updated soon. Stay tuned!
