@@ -1,16 +1,10 @@
-# Environment
-dotenv
+streamlit>=1.32
+altair>=5
 
-# Excel
+python-dotenv
 pandas
 openpyxl
 xlsxwriter
-
-# Streamlit
-streamlit==1.19.0
-altair==4.2.2
-
-# Scraping
-email_validator
+email-validator
 beautifulsoup4
 requests
